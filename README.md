@@ -1,8 +1,12 @@
+<p align="right">
+  <a href="README-zh.md">🇨🇳 中文</a>
+</p>
+
 # Pi Web Suite
 
-Web search, URL fetching, PDF extraction, and content extraction tools for Pi coding agent。
+> Web search, URL fetching, PDF extraction, and content extraction tools for the Pi coding agent.
 
-基于 `@juicesharp/rpiv-web-tools` 整合改造，支持多种搜索 provider 级联和智能内容抽取。
+A Pi extension that brings `web_search`, `fetch_content`, and `get_search_content` tools with cascading search providers and smart content extraction. Based on [`@juicesharp/rpiv-web-tools`](https://github.com/juicesharp/rpiv-web-tools).
 
 ## Install
 
@@ -10,68 +14,78 @@ Web search, URL fetching, PDF extraction, and content extraction tools for Pi co
 pi install npm:pi-web-suite
 ```
 
-安装后重启 pi，你会获得：
-- `web_search` 工具搜索互联网
-- `fetch_content` 工具抓取网页 / GitHub 仓库 / PDF
-- `get_search_content` 工具检索历史搜索结果
-- `/web-search-config` 命令配置 API keys
+Once installed and pi restarted, you get:
+- `web_search` — search the web via cascading providers
+- `fetch_content` — fetch URLs, GitHub repos, PDFs, and extract content
+- `get_search_content` — retrieve past search results by ID
+- `/web-search-config` — configure API keys interactively
 
-## 特性
+## Features
 
-- **零配置搜索** — Exa MCP 端点无需 API key 即可使用
-- **智能级联** — Exa → AnySearch → Tavily，自动选择可用 provider
-- **内容提取** — Readability + linkedom 本地抽取，Jina / defuddle 代理 fallback
-- **GitHub 仓库** — API 方式获取文件内容和目录树
-- **PDF 提取** — 基于 unpdf 的文本提取
-- **SSRF 防护** — DNS 解析 + IP 范围检查，阻止内网请求
+- **Zero-config search** — Exa MCP endpoint works without any API key
+- **Smart cascading** — Exa → AnySearch → Tavily, automatic provider selection
+- **Content extraction** — Readability + linkedom local extraction, Jina / defuddle proxy fallback
+- **GitHub repos** — API-based file and directory access
+- **PDF extraction** — Text extraction via unpdf
+- **SSRF protection** — DNS resolution + IP range checks blocking private network requests
 
 ## Quick Start
 
 ```typescript
-// 搜索
+// Search the web
 web_search({ query: "TypeScript best practices 2025" })
 
-// 获取页面
+// Fetch a page
 fetch_content({ url: "https://docs.example.com/guide" })
 
-// 获取 GitHub 仓库
+// Fetch a GitHub repo
 fetch_content({ url: "https://github.com/owner/repo" })
 
-// 获取 PDF
+// Fetch a PDF
 fetch_content({ url: "https://example.com/doc.pdf" })
+
+// Retrieve past search results
+get_search_content({ searchId: "sr_..." })
 ```
 
 ## Tools
 
 ### `web_search`
 
-搜索互联网，自动选择可用的搜索 provider（Exa → AnySearch → Tavily）。
+Search the web. Automatically selects the first available provider (Exa → AnySearch → Tavily).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | yes | 搜索查询 |
-| `numResults` | number | no | 返回结果数（默认 5，最大 20） |
+| `query` | string | yes | Search query |
+| `numResults` | number | no | Results per query (default 5, max 20) |
 | `recencyFilter` | string | no | `day`, `week`, `month`, `year` |
+
+Returns search results with titles, URLs, snippets, and an optional answer. Each call returns a `searchId` for later retrieval via `get_search_content`.
 
 ### `fetch_content`
 
-获取 URL 的内容。自动处理普通网页、GitHub 仓库、PDF 文件。
+Fetch a URL and return its content as readable Markdown. Auto-detects and handles GitHub repos, PDFs, and regular web pages.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `url` | string | yes | 支持 http/https、GitHub 链接、PDF 链接 |
+| `url` | string | yes | Supports http/https, GitHub links, PDF links |
+
+**Fetch chain:**
+- GitHub URL → GitHub API (file contents / directory tree)
+- PDF → unpdf text extraction
+- HTML → Readability + linkedom local extraction → Jina Reader proxy → defuddle proxy
 
 ### `get_search_content`
 
-通过 searchId 检索之前搜索的完整结果。
+Retrieve stored content from a previous `web_search` call.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `searchId` | string | yes | 来自 web_search 返回的 details.searchId |
+| `searchId` | string | yes | ID from `web_search` response details |
 
 ## Configuration
 
-通过 `/web-search-config` 命令交互式配置 API keys，或直接编辑 `~/.pi/web-search.json`：
+Run `/web-search-config` to configure API keys interactively, or edit `~/.pi/web-search.json` directly:
 
 ```json
 {
@@ -81,24 +95,30 @@ fetch_content({ url: "https://example.com/doc.pdf" })
 }
 ```
 
-环境变量优先级高于配置文件：`EXA_API_KEY`、`ANYSEARCH_API_KEY`、`TAVILY_API_KEY`。
+Environment variables take precedence over config: `EXA_API_KEY`, `ANYSEARCH_API_KEY`, `TAVILY_API_KEY`.
 
-Provider 说明：
-- **Exa**: 有 key 用 Direct API，无 key 用 MCP 端点（零配置）
-- **AnySearch**: 有 key 用 Bearer，无 key 用匿名（1000次/天）
-- **Tavily**: 必须有 key
+**Provider notes:**
+- **Exa**: Direct API with key, MCP endpoint (zero-config) without
+- **AnySearch**: Bearer auth with key, anonymous without (1000 req/day)
+- **Tavily**: Requires API key
 
-## 文件
+## Project Structure
 
 ```
 pi-web-suite/
-├── index.ts      # 主逻辑（3 个工具 + 1 个命令）
-├── types.ts      # 公共类型
-├── search.ts     # 搜索级联（Exa / AnySearch / Tavily）
-├── fetch.ts      # URL 抓取路由（GitHub / PDF / HTML）
-├── extract.ts    # HTML 内容抽取（Readability → Jina → defuddle）
-├── config.ts     # API key 管理
-├── ssrf.ts       # SSRF 防护
-├── storage.ts    # 搜索结果缓存
-└── test/         # 测试
+├── index.ts      # Main entry (3 tools, 1 command)
+├── types.ts      # Shared types
+├── search.ts     # Search cascade (Exa / AnySearch / Tavily)
+├── fetch.ts      # URL fetch router (GitHub / PDF / HTML)
+├── extract.ts    # HTML content extraction (Readability → Jina → defuddle)
+├── config.ts     # API key management
+├── ssrf.ts       # SSRF protection
+├── storage.ts    # Search result cache
+├── test/         # Tests
+├── README.md     # This file (English)
+└── README-zh.md  # Chinese translation
 ```
+
+## License
+
+MIT — based on [`@juicesharp/rpiv-web-tools`](https://github.com/juicesharp/rpiv-web-tools) (MIT).
