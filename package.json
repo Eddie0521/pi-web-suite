@@ -1,6 +1,6 @@
 {
   "name": "pi-web-suite",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Web search, URL fetching, PDF extraction, and content extraction tools for the Pi coding agent. Cascading providers: Exa, AnySearch, Tavily.",
   "keywords": [
     "pi-package",
