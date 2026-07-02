@@ -1,0 +1,31 @@
+{
+  "name": "pi-web-suite",
+  "version": "0.1.0",
+  "description": "Web search, URL fetching, PDF extraction 的 Pi 扩展。支持 Exa / AnySearch / Tavily 搜索级联和内容抽取。",
+  "keywords": ["pi-package", "pi-extension", "pi-web-suite", "web-search", "fetch", "extract"],
+  "license": "MIT",
+  "type": "module",
+  "main": "index.ts",
+  "pi": {
+    "extensions": ["./index.ts"],
+    "image": "https://github.com/Eddie0521/pi-web-suite/raw/main/screenshot.png"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.16.0",
+    "turndown": "^7.2.0",
+    "unpdf": "^1.6.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eddie0521/pi-web-suite.git"
+  },
+  "homepage": "https://github.com/Eddie0521/pi-web-suite#readme",
+  "bugs": {
+    "url": "https://github.com/Eddie0521/pi-web-suite/issues"
+  }
+}
