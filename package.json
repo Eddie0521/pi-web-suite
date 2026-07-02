@@ -1,7 +1,7 @@
 {
   "name": "pi-web-suite",
   "version": "0.2.0",
-  "description": "Web search, URL fetching, PDF extraction 的 Pi 扩展。支持 Exa / AnySearch / Tavily 搜索级联和内容抽取。",
+  "description": "Web search, URL fetching, PDF extraction, and content extraction tools for the Pi coding agent. Cascading providers: Exa, AnySearch, Tavily.",
   "keywords": [
     "pi-package",
     "pi-extension",
