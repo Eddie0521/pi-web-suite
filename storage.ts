@@ -31,6 +31,7 @@ export function storeSearch(query: string, results: SearchResult[], answer: stri
 }
 
 export function getSearch(id: string): StoredSearch | undefined {
+  if (!id || typeof id !== "string") return undefined;
   return store.get(id);
 }
 

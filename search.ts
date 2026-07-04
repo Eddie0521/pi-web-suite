@@ -10,10 +10,14 @@
 import type { SearchOptions, SearchResponse } from "./types.ts";
 import { resolveKeys } from "./config.ts";
 
-// ─── Exa ──────────────────────────────────────────────────────────────
+// ─── Endpoints ────────────────────────────────────────────────────────
 
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
 const EXA_MCP_URL = "https://mcp.exa.ai/mcp";
+const ANYSEARCH_URL = "https://api.anysearch.com/v1/search";
+const TAVILY_URL = "https://api.tavily.com/search";
+
+// ─── Exa ──────────────────────────────────────────────────────────────
 
 interface ExaResult {
   title?: string;
@@ -22,44 +26,51 @@ interface ExaResult {
 }
 
 async function searchExa(query: string, key: string | null, options: SearchOptions): Promise<SearchResponse | null> {
-  if (key) {
-    const res = await fetch(EXA_SEARCH_URL, {
+  try {
+    if (key) {
+      const res = await fetch(EXA_SEARCH_URL, {
+        method: "POST",
+        headers: { "x-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ query, numResults: options.numResults ?? 5 }),
+        signal: options.signal,
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { results?: ExaResult[] };
+      if (!data.results?.length) return null;
+      const results: Array<{ title: string; url: string; snippet: string }> = [];
+      for (const r of data.results) {
+        if (r.url) {
+          results.push({ title: r.title ?? "", url: r.url, snippet: r.text ?? "" });
+        }
+      }
+      return { results, provider: "exa" };
+    }
+
+    // MCP 零配置模式
+    const res = await fetch(EXA_MCP_URL, {
       method: "POST",
-      headers: { "x-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ query, numResults: options.numResults ?? 5 }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "web_search_exa", arguments: { query, numResults: options.numResults ?? 5 } },
+      }),
       signal: options.signal,
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { results?: ExaResult[] };
-    if (!data.results?.length) return null;
-    return {
-      results: data.results.filter((r) => r.url).map((r) => ({ title: r.title ?? "", url: r.url!, snippet: r.text ?? "" })),
-      provider: "exa",
-    };
+    const body = await res.text();
+    // 解析 MCP 返回的文本块
+    const lines = body.split("\n").filter((l) => l.startsWith("data:"));
+    const last = lines.at(-1)?.slice(5).trim();
+    if (!last) return null;
+    let mcpResult: { result?: { content?: Array<{ text?: string }> } };
+    try { mcpResult = JSON.parse(last); } catch { return null; }
+    const text = mcpResult.result?.content?.find((c) => c.text)?.text;
+    if (!text) return null;
+    const results = parseExaMcpBlock(text);
+    return results.length > 0 ? { results, provider: "exa" } : null;
+  } catch {
+    return null;
   }
-
-  // MCP 零配置模式
-  const res = await fetch(EXA_MCP_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0", id: 1, method: "tools/call",
-      params: { name: "web_search_exa", arguments: { query, numResults: options.numResults ?? 5 } },
-    }),
-    signal: options.signal,
-  });
-  if (!res.ok) return null;
-  const body = await res.text();
-  // 解析 MCP 返回的文本块
-  const lines = body.split("\n").filter((l) => l.startsWith("data:"));
-  const last = lines[lines.length - 1]?.slice(5).trim();
-  if (!last) return null;
-  let mcpResult: { result?: { content?: Array<{ text?: string }> } };
-  try { mcpResult = JSON.parse(last); } catch { return null; }
-  const text = mcpResult.result?.content?.find((c) => c.text)?.text;
-  if (!text) return null;
-  const results = parseExaMcpBlock(text);
-  return results.length > 0 ? { results, provider: "exa" } : null;
 }
 
 function parseExaMcpBlock(text: string) {
@@ -77,8 +88,6 @@ function parseExaMcpBlock(text: string) {
 
 // ─── AnySearch ────────────────────────────────────────────────────────
 
-const ANYSEARCH_URL = "https://api.anysearch.com/v1/search";
-
 interface AnySearchResult {
   title?: string;
   url?: string;
@@ -95,29 +104,32 @@ interface AnySearchResponse {
 }
 
 async function searchAnySearch(query: string, key: string | null, options: SearchOptions): Promise<SearchResponse | null> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (key) headers["Authorization"] = `Bearer ${key}`;
+  try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (key) headers["Authorization"] = `Bearer ${key}`;
 
-  const res = await fetch(ANYSEARCH_URL, {
-    method: "POST", headers,
-    body: JSON.stringify({ query, max_results: options.numResults ?? 10 }),
-    signal: options.signal,
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as AnySearchResponse;
-  if (data.code !== 0 || !data.data?.results?.length) return null;
+    const res = await fetch(ANYSEARCH_URL, {
+      method: "POST", headers,
+      body: JSON.stringify({ query, max_results: options.numResults ?? 10 }),
+      signal: options.signal,
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as AnySearchResponse;
+    if (data.code !== 0 || !data.data?.results?.length) return null;
 
-  return {
-    results: data.data.results
-      .filter((r) => r.url)
-      .map((r) => ({ title: r.title ?? "", url: r.url!, snippet: (r.snippet ?? r.content ?? "").slice(0, 500) })),
-    provider: "anysearch",
-  };
+    const results: Array<{ title: string; url: string; snippet: string }> = [];
+    for (const r of data.data.results) {
+      if (r.url) {
+        results.push({ title: r.title ?? "", url: r.url, snippet: (r.snippet ?? r.content ?? "").slice(0, 500) });
+      }
+    }
+    return { results, provider: "anysearch" };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Tavily ───────────────────────────────────────────────────────────
-
-const TAVILY_URL = "https://api.tavily.com/search";
 
 interface TavilyResult {
   title?: string;
@@ -131,28 +143,32 @@ interface TavilyResponse {
 }
 
 async function searchTavily(query: string, key: string, options: SearchOptions): Promise<SearchResponse | null> {
-  const res = await fetch(TAVILY_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      search_depth: "basic",
-      max_results: options.numResults ?? 5,
-      include_answer: "basic",
-      ...(options.recencyFilter ? { time_range: options.recencyFilter } : {}),
-    }),
-    signal: options.signal,
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as TavilyResponse;
-  if (!data.results?.length) return null;
-  return {
-    results: data.results
-      .filter((r) => r.url)
-      .map((r) => ({ title: r.title ?? "", url: r.url!, snippet: (r.content ?? "").slice(0, 500) })),
-    answer: data.answer,
-    provider: "tavily",
-  };
+  try {
+    const res = await fetch(TAVILY_URL, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query,
+        search_depth: "basic",
+        max_results: options.numResults ?? 5,
+        include_answer: "basic",
+        ...(options.recencyFilter ? { time_range: options.recencyFilter } : {}),
+      }),
+      signal: options.signal,
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as TavilyResponse;
+    if (!data.results?.length) return null;
+    const results: Array<{ title: string; url: string; snippet: string }> = [];
+    for (const r of data.results) {
+      if (r.url) {
+        results.push({ title: r.title ?? "", url: r.url, snippet: (r.content ?? "").slice(0, 500) });
+      }
+    }
+    return { results, answer: data.answer, provider: "tavily" };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────
@@ -178,7 +194,7 @@ export async function search(query: string, options: SearchOptions = {}): Promis
 }
 
 /** 检查可用的 provider 列表 */
-export async function getAvailableProviders(): Promise<string[]> {
+export function getAvailableProviders(): string[] {
   const keys = resolveKeys();
   const available: string[] = [];
 

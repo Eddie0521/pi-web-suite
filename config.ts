@@ -1,23 +1,36 @@
 /**
  * Config — API key 管理
  *
- * 配置文件：~/.pi/web-search.json
+ * 配置文件：~/.pi/config/web-search.json
  * 环境变量优先（EXA_API_KEY / ANYSEARCH_API_KEY / TAVILY_API_KEY）
  * 交互式配置：/web-search-config 命令
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { WebSearchConfig } from "./types.ts";
 
-const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
+const CONFIG_PATH = join(homedir(), ".pi", "config", "web-search.json");
+const LEGACY_CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 export function getConfigPath(): string {
   return CONFIG_PATH;
 }
 
+function ensureMigrated(): void {
+  if (existsSync(CONFIG_PATH)) return;
+  if (!existsSync(LEGACY_CONFIG_PATH)) return;
+
+  mkdirSync(dirname(CONFIG_PATH), { recursive: true });
+  const raw = readFileSync(LEGACY_CONFIG_PATH, "utf-8");
+  writeFileSync(CONFIG_PATH, raw, "utf-8");
+  try { chmodSync(CONFIG_PATH, 0o600); } catch { /* best effort */ }
+  try { unlinkSync(LEGACY_CONFIG_PATH); } catch { /* best effort */ }
+}
+
 function loadRaw(): WebSearchConfig {
+  ensureMigrated();
   if (!existsSync(CONFIG_PATH)) return {};
   try {
     const raw = readFileSync(CONFIG_PATH, "utf-8");

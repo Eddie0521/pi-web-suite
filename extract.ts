@@ -9,6 +9,7 @@
 import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
+import { checkSSRF } from "./ssrf.ts";
 
 const turndown = new TurndownService({ headingStyle: "atx" });
 
@@ -32,13 +33,17 @@ function extractWithReadability(html: string, url: string): ExtractedContent | n
   const article = reader.parse();
   if (!article) return null;
 
-  const content = article.textContent?.trim() || article.content?.trim() || "";
+  const articleHtml = article.content?.trim() || "";
+  const text = article.textContent?.trim() || "";
+  // Prefer HTML content for turndown conversion (preserves structure),
+  // fall back to plain text if Readability didn't produce HTML.
+  const content = articleHtml || text;
   if (content.length < 50) return null; // 太短说明抽取失败
 
   return {
     url,
     title: article.title?.trim() || "",
-    content: turndown.turndown(content),
+    content: articleHtml ? turndown.turndown(articleHtml) : text,
   };
 }
 
@@ -61,6 +66,8 @@ async function fetchViaProxy(url: string, proxyUrl: string): Promise<string | nu
 // ─── Public API ────────────────────────────────────────────────────────
 
 export async function extractContent(url: string, html?: string): Promise<ExtractedContent> {
+  await checkSSRF(url);
+
   // 如果有 HTML 内容（已 fetch），先用 Readability
   if (html) {
     const local = extractWithReadability(html, url);

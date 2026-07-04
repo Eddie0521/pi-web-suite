@@ -36,5 +36,8 @@
   "homepage": "https://github.com/Eddie0521/pi-web-suite#readme",
   "bugs": {
     "url": "https://github.com/Eddie0521/pi-web-suite/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0"
   }
 }
