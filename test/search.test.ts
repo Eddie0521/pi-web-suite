@@ -1,7 +1,14 @@
 /** Search 测试 */
 
 import { test, expect, mock } from "bun:test";
-import { search } from "../search.ts";
+
+// Mock 掉 config，避免测试读取本机 ~/.pi/config/web-search.json 里的真实 key
+// （有 key 时 searchExa 会走 REST 分支，绕过下面 mock 的 MCP 端点）
+mock.module("../config.ts", () => ({
+	resolveKeys: () => ({ exa: null, anySearch: null, tavily: null }),
+}));
+
+const { search } = await import("../search.ts");
 
 // Mock 全局 fetch
 const originalFetch = globalThis.fetch;

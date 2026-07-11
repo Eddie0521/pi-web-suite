@@ -62,7 +62,7 @@ async function fetchPdf(url: string): Promise<FetchResult | null> {
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("pdf")) return null;
 
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const buffer = new Uint8Array(await res.arrayBuffer());
     const { text } = await extractText(buffer);
     const content = text.join("\n\n").trim();
     return { url, title: "", content: content || "（PDF 无文本内容）" };
